@@ -57,7 +57,7 @@ def Convolution(miceImage):
 def Gaussian(miceImage):
     mice = [[], []]
     for i in range(len(miceImage)):
-        mice[i] = cv2.GaussianBlur(miceImage[i], (5, 5), 0)
+        mice[i] = cv2.GaussianBlur(miceImage[i], (7, 7), 0)
 
     return mice
 
@@ -69,6 +69,7 @@ def Normalization(frame):
         frame[i] = frame[i].astype(int)
 
     return frame
+
 
 # Skeleton image
 def Skeletonization(miceImage):
@@ -91,6 +92,36 @@ def Skeletonization(miceImage):
         mice[i] = skel
     return mice
 
+# Count 
+def Counting(miceImage):
+    mice = []
+
+    for i in range(len(miceImage)):
+        mice.append(sum(1 for rows in miceImage[i] for val in rows if val))
+
+    return mice
+
+
+# Draw keypoints
+def DrawKeypoints(image, kps, color=(0, 255, 0)):
+    for kp in kps:
+        x, y = kp.pt
+        cv2.circle(image, (int(x), int(y)), 3, color, -1)
+    return image
+
+
+# SIFT
+def SIFT(miceImage):
+    sift = cv2.ORB_create()
+    mice = [[], []]
+
+    for i in range(len(miceImage)):
+        kp = sift.detect(miceImage[i], None)
+        kp, des = sift.compute(miceImage[i], kp)
+        mice[i] = DrawKeypoints(miceImage[i], kp)
+
+    return mice.copy()
+
 
 # Main
 def Main(video_path, micePosition):
@@ -105,11 +136,15 @@ def Main(video_path, micePosition):
         miceBW = MakeFrameToBlackWhite(frame, micePosition)
         miceBW = Convolution(miceBW)
         miceBWCopy = miceBW.copy()
-        miceSkel = Skeletonization(miceBWCopy)
+        miceSkel = Skeletonization(miceBWCopy).copy()
+        amount = Counting(miceSkel.copy())
+        print(amount)
+        # miceSkelSIFT = SIFT(miceSkel)
         cv2.imshow("M1", miceBW[0])
         cv2.imshow("M2", miceBW[1])
         cv2.imshow("S1", miceSkel[0])
         cv2.imshow("S2", miceSkel[1])
+
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
