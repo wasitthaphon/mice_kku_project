@@ -1,4 +1,6 @@
 import numpy as np 
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import cv2
 import sys
 import time
@@ -19,9 +21,9 @@ def FindMicePosition(frame):
         x,y,w,h = cv2.boundingRect(sorted_cnts[len(sorted_cnts)-(i+1)])
         micePosition[i] = {
             "x" : x-paddingX,
-            "y" : y,
+            "y" : y+10,
             "w" : w+(2*paddingX),
-            "h" : h+paddingY
+            "h" : h+paddingY+10
         }
 
     return micePosition
@@ -47,7 +49,7 @@ def MakeFrameToBlackWhite(frame, micePosition):
 
 # Image smooth
 def Convolution(miceImage):
-    kernel = np.ones((7,7), np.float32)/25
+    kernel = np.ones((5,5), np.float32)/30
     mice = [[], []]
     for i in range(len(miceImage)):
         mice[i] = cv2.filter2D(miceImage[i], -1, kernel)
@@ -84,7 +86,7 @@ def Skeletonization(miceImage):
             temp = cv2.dilate(eroded, element)
             temp = cv2.subtract(miceImage[i], temp)
             skel = cv2.bitwise_or(skel, temp)
-            miceImage[i] = eroded.copy()
+            miceImage[i] = eroded
 
             zeros = size - cv2.countNonZero(miceImage[i])
             if zeros == size:
@@ -118,9 +120,40 @@ def SIFT(miceImage):
     for i in range(len(miceImage)):
         kp = sift.detect(miceImage[i], None)
         kp, des = sift.compute(miceImage[i], kp)
-        mice[i] = DrawKeypoints(miceImage[i], kp)
+        mice[i] = kp
 
-    return mice.copy()
+    return mice
+
+# Plot
+class Plot:
+    mice = []
+
+    def __init__(self, ax):
+        self.ax = ax
+
+    def Plot(self, miceImage):
+        axis = [211, 212]
+        x = []
+        y = []
+        plt.clf()
+        print('KP : {}, {}'.format(len(miceImage[0]), len(miceImage[1])))
+        for i in range(len(miceImage)):
+            x.clear()
+            y.clear()
+            plt.subplot(axis[i])
+            for kp in miceImage[i].copy():
+                j, k = kp.pt
+                x.append(j)
+                y.append(k)
+            maximumVla = max(y)
+            inverseY = [(maximumVla - eachY) for eachY in y]
+            plt.scatter(x,inverseY)
+                # plt.pause(0.5)
+            # plt.subplot(axis[i])
+            # u,v = np.meshgrid(x,y)
+            # q = plt.quiver(x,y,u,v)
+            # plt.quiverkey(q, X=0.3, Y=1.1, U=10, label='Quiver key, length 10', labelpos='E')
+            self.mice.append([x,y])
 
 
 # Main
@@ -128,29 +161,44 @@ def Main(video_path, micePosition):
 
     cap = cv2.VideoCapture(video_path)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
+    frame_counter = 0
+    fig = plt.figure()
+    ax1 = fig.add_subplot(2,2,1)
+    ax2 = fig.add_subplot(2,2,2)
+
     while cap.isOpened():
         ret, frame = cap.read()
 
         if not ret:
             break
+
+        frame_counter = frame_counter + 1
+        if (frame_counter % fps) != 0:
+            continue
         miceBW = MakeFrameToBlackWhite(frame, micePosition)
         miceBW = Convolution(miceBW)
         miceBWCopy = miceBW.copy()
         miceSkel = Skeletonization(miceBWCopy).copy()
-        amount = Counting(miceSkel.copy())
-        print(amount)
+
+        miceKeypoints = SIFT(miceSkel).copy()
+
         # miceSkelSIFT = SIFT(miceSkel)
         cv2.imshow("M1", miceBW[0])
         cv2.imshow("M2", miceBW[1])
         cv2.imshow("S1", miceSkel[0])
         cv2.imshow("S2", miceSkel[1])
 
+        mPlot = Plot([ax1, ax2])
+        mPlot.Plot(miceKeypoints)
+        plt.savefig('tmp.png')
+        plotImage = cv2.imread('tmp.png', cv2.IMREAD_COLOR)
+        cv2.imshow("Plot", plotImage)
+        
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-        time.sleep(1 / fps)
-
+        time.sleep(1)
     cap.release()
     cv2.destroyAllWindows()
     
